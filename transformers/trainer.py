@@ -1488,7 +1488,6 @@ class Trainer:
             kwargs:
                 Additional keyword arguments used to hide deprecated arguments
         """
-        # todo
         self.eval_loss = 10000
         self.eval_accuracy = 0
 
@@ -1807,7 +1806,7 @@ class Trainer:
                     tr_loss += tr_loss / (1 + self.state.global_step - self._globalstep_last_logged)
                 else:
                     tr_loss += tr_loss_step
-                # todo 保留tr_loss
+                # todo save tr_loss
                 self.state.tr_loss = tr_loss
 
                 self.current_flos += float(self.floating_point_ops(inputs))

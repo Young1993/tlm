@@ -1,0 +1,8 @@
+datasets==1.8.0
+numpy
+torch==2.0.1
+ray
+evaluate
+transformers==4.32.0
+scipy
+sklearn

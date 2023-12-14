@@ -1,11 +1,21 @@
 # TLM: Token-Level Masking for Transformers (EMNLP2023)
+
 The public code.\
-In this paper, we propose a new regularization scheme based on token-level rather than structure-level to reduce overfitting. Specifically, we devise a novel Token-Level Masking (TLM) training strategy for Transformers to regularize the connections of self-attention, which consists of two masking techniques that are effective and easy to implement. The underlying idea is to manipulate the connections between tokens in the multi-head attention via masking, where the networks are forced to exploit partial neighbors’ information to produce a meaningful representation. 
+In this paper, we propose a new regularization scheme based on token-level rather than structure-level to reduce
+overfitting. Specifically, we devise a novel Token-Level Masking (TLM) training strategy for Transformers to regularize
+the connections of self-attention, which consists of two masking techniques that are effective and easy to implement.
+The underlying idea is to manipulate the connections between tokens in the multi-head attention via masking, where the
+networks are forced to exploit partial neighbors’ information to produce a meaningful representation.
 
 ## Note
+
 we release the code => BERT-base (bert-base-cased) with TLM on RTE
 
+- if you do not use attention dropout, set attention_probs_dropout_prob=0
+- if you do not use tlm, set --use_tlm=0
+
 ## Installation
+
 ```shell
 git clone https://github.com/Young1993/tlm.git
 cd tlm/
@@ -13,22 +23,29 @@ pip install -r requirements.txt
 ```
 
 ### Use TLM
+
 ```shell
 cd glue
 sh bert-base_sh/rte_train_tlm.sh
 ```
+
 ### without TLM
-cd glue
-sh bert-base_sh/rte_train.sh
+
+cd glue sh bert-base_sh/rte_train.sh
 
 ### Notice
 
+If you plan to apply tlm to decoder-only architecture, you can reference to the code in
+./transformers/models/bert/modeling_bert.py.
+
 # Todo
-- [x] Run Bert-base with TLM
-- [ ] To test QWen/LLama/sqlcoder with TLM
 
+- ✅ Run Bert-base with TLM.
+- To test QWen/LLama/sqlcoder with TLM.
+- To pull requests code into Transformers.
 
-#Citation
+# Citation
+
 ```text
 @inproceedings{wu-etal-2023-tlm,
     title = "{TLM}: Token-Level Masking for Transformers",

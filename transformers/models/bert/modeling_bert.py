@@ -559,58 +559,53 @@ class BertEncoder(nn.Module):
         self.config = config
         self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
+        self.use_tlm = config.use_tlm
+        self.rate = config.masking_rate
 
-    # todo
-    def _d_expand_mask(self, d_mask: torch.Tensor, d_mask_type=None, tgt_len: Optional[int] = None):
+    def _d_expand_mask(self, d_mask: torch.Tensor, mask_type='both', tgt_len: Optional[int] = None):
         """
         d_expand_mask:Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
         d_mask_type: choice['d_mask_other', 'd_mask_own']
         """
-        if d_mask_type:
-            bsz, src_len = d_mask.size()
+        if mask_type:
+            bsz, src_len = d_mask.size()[0], d_mask.size()[1]
             tgt_len = tgt_len if tgt_len is not None else src_len
             new_d_mask = []
 
             for dm in d_mask:
                 ndm = []
                 for i in range(len(dm)):
-                    if d_mask_type == 'd_mask_other':
+                    if mask_type == 'siblings_masking':
                         if dm[i] != 1:
-                            _ = torch.zeros(len(dm), dtype=torch.int64)
+                            _ = torch.zeros(len(dm), dtype=torch.int64).to(dm.device)
                             _[i] = 1
                         else:
                             _ = dm
-                    elif d_mask_type == 'd_mask_own':
+                    elif mask_type == 'self_masking':
                         if dm[i] != 1:
-                            _ = torch.ones(len(dm), dtype=torch.int64)
+                            _ = torch.ones(len(dm), dtype=torch.int64).to(dm.device)
                             _[i] = 0
                         else:
                             _ = dm
-                    elif d_mask_type == 'light_d_mask_other':
-                        if dm[i] != 1:
-                            _ = torch.zeros(len(dm), dtype=torch.int64)
-                            _[i] = 1
-                        else:
-                            _ = torch.ones(len(dm), dtype=torch.int64)
-                    elif d_mask_type == 'random':
-                        random_d_mask_type = random.choice(['d_mask_other', 'd_mask_own'])
-                        if random_d_mask_type == 'd_mask_other':
+                    elif mask_type == 'both':
+                        random_mask_type = random.choice(['siblings_masking', 'self_masking'])
+                        if random_mask_type == 'siblings_masking':
                             if dm[i] != 1:
-                                _ = torch.zeros(len(dm), dtype=torch.int64)
+                                _ = torch.zeros(len(dm), dtype=torch.int64).to(dm.device)
                                 _[i] = 1
                             else:
                                 _ = dm
-                        elif random_d_mask_type == 'd_mask_own':
+                        elif random_mask_type == 'self_masking':
                             if dm[i] != 1:
-                                _ = torch.ones(len(dm), dtype=torch.int64)
+                                _ = torch.ones(len(dm), dtype=torch.int64).to(dm.device)
                                 _[i] = 0
                             else:
                                 _ = dm
                     else:
-                        raise NotImplementedError("d_mask_type输入有误")
+                        raise NotImplementedError(f"mask_type {mask_type} is invalid")
                     ndm.append(_.unsqueeze(0))
                 new_d_mask.append(torch.cat(ndm).unsqueeze(0))
-            expanded_mask = torch.cat(new_d_mask)    # (bsz, tgt_len, src_len)
+            expanded_mask = torch.cat(new_d_mask)  # (bsz, tgt_len, src_len)
             expanded_mask = expanded_mask[:, None, :, :].expand(bsz, 1, tgt_len, src_len)
         else:
             expanded_mask = d_mask.unsqueeze(1).unsqueeze(2)
@@ -634,59 +629,21 @@ class BertEncoder(nn.Module):
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
 
         next_decoder_cache = () if use_cache else None
-        # todo
-        attention_mask_copy = attention_mask
-        for i, layer_module in enumerate(self.layer):
-        #     if self.training:
-        #         attention_mask = attention_mask_copy
-        #         # print("1------------")
-        #         # print(attention_mask_copy.shape)
-        #         # print(attention_mask_copy)
-        #         attention_mask = attention_mask.squeeze()
-        #         attention_mask = (attention_mask / 9999) + 1
-        #         # print("2------------")
-        #         # print(attention_mask.shape)
-        #         # print(attention_mask)
-        #         attention_mask = torch.where(attention_mask > -1.0, attention_mask,
-        #                                      torch.tensor(0.).to(attention_mask.device))
-        #         if i > 5:
-        #             attention_mask = attention_mask.cpu() * torch.bernoulli(torch.full(attention_mask.shape, 0.85))
-        #             # attention_mask = self._d_expand_mask(attention_mask, 'd_mask_other')
-        #             # attention_mask = self._d_expand_mask(attention_mask, 'light_d_mask_other')
-        #             # attention_mask = self._d_expand_mask(attention_mask, 'd_mask_own')
-        #             attention_mask = self._d_expand_mask(attention_mask, 'random')
-        #             #attention_mask = self._d_expand_mask(attention_mask)
-        #         elif 5 >= i > -1:
-        #             # print("3------------")
-        #             # print(attention_mask.shape)
-        #             # print(attention_mask)
-        #             attention_mask = attention_mask.cpu() * torch.bernoulli(torch.full(attention_mask.shape, 0.85))
-        #             # attention_mask = self._d_expand_mask(attention_mask, 'd_mask_other')
-        #             # attention_mask = self._d_expand_mask(attention_mask, 'light_d_mask_other')
-        #             # attention_mask = self._d_expand_mask(attention_mask, 'd_mask_own')
-        #             # print("4------------")
-        #             # print(attention_mask.shape)
-        #             # print(attention_mask)
-        #             attention_mask = self._d_expand_mask(attention_mask, 'random')
-        #             # print("5------------")
-        #                # print(attention_mask.shape)
-        #             # print(attention_mask)
-        #             #attention_mask = self._d_expand_mask(attention_mask)
-        #         else:
-        #             attention_mask = attention_mask_copy
-        #         # attention_mask = attention_mask.unsqueeze(1)
-        #         attention_mask = attention_mask.to(attention_mask_copy.device).to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
-        #         attention_mask = (1.0 - attention_mask) * -3.4028e+38
-        #     else:
-        #         attention_mask = attention_mask_copy
+        # use tlm
+        if self.use_tlm and self.training:
+            attention_mask_copy = attention_mask
 
-            attention_mask = attention_mask_copy
-            # # todo shape:(num_hidden_layers, 1, num_attention_heads, 1, 1)
-            # print("drophead")
-            if self.training:
-                head_mask = torch.ones((self.config.num_hidden_layers, self.config.num_attention_heads))
-                head_mask = torch.bernoulli(torch.full(head_mask.shape, 0.8))
-                head_mask = head_mask.unsqueeze(1).unsqueeze(3).unsqueeze(4).to(attention_mask_copy.device)
+        for i, layer_module in enumerate(self.layer):
+            if self.use_tlm and self.training:
+                attention_mask = attention_mask_copy
+                attention_mask = attention_mask.squeeze() + 1  # (1.0 - extended_attention_mask) * torch.finfo(dtype).min
+                attention_mask = torch.where(attention_mask > -0.1, attention_mask,
+                                             torch.tensor(0.).to(attention_mask.device))
+                # use bernoulli random function to select  = 1 - R
+                attention_mask = attention_mask * torch.bernoulli(torch.full(attention_mask.shape, self.rate)).to(
+                    attention_mask.device)
+                attention_mask = self._d_expand_mask(attention_mask, 'both')
+                attention_mask = (1.0 - attention_mask) * torch.finfo(attention_mask.dtype).min  # -3.4028e+38
 
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)

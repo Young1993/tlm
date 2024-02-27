@@ -7,14 +7,14 @@ the connections of self-attention, which consists of two masking techniques that
 The underlying idea is to manipulate the connections between tokens in the multi-head attention via masking, where the
 networks are forced to exploit partial neighbors’ information to produce a meaningful representation.
 
-## Note
+## <em>Note</em>
 
 we release the code => BERT-base (bert-base-cased) with TLM on RTE
 
-- if you do not use attention dropout, set attention_probs_dropout_prob=0
-- if you do not use tlm, set --use_tlm=0
+- if you do not use attention dropout, set **attention_probs_dropout_prob=0**
+- if you do not use tlm, set **--use_tlm=0**
 
-## Installation
+## 1 Installation
 
 ```shell
 git clone https://github.com/Young1993/tlm.git
@@ -22,16 +22,25 @@ cd tlm/
 pip install -r requirements.txt
 ```
 
-### Use TLM
+### 1.1 Training with TLM based on Bert
 
 ```shell
 cd glue
 sh bert-base_sh/rte_train_tlm.sh
 ```
 
-### without TLM
+### 1.2 Training without TLM based on Bert
 
 cd glue sh bert-base_sh/rte_train.sh
+
+### 🆕1.3 Training with TLM based on Bart
+1. First, you need to install fnlp/bart-base-chinese;
+2. Second, run preprocess.py
+3. The code is not high efficient, I will update it soon.
+```shell
+cd cged
+sh train_tlm.sh 0
+```
 
 ### Notice
 
@@ -41,6 +50,7 @@ If you plan to apply tlm to decoder-only architecture, you can reference to the 
 # Todo
 
 - ✅ Run Bert-base with TLM.
+- Run Bart-base with TLM
 - To test QWen/LLama/sqlcoder with TLM.
 - To pull requests code into Transformers.
 

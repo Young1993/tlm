@@ -1,3 +1,5 @@
 __pycache__/
 .idea/
 glue/glue_out/
+*.DS_Store
+cged/bart-base-chinese/

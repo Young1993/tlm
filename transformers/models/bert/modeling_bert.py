@@ -564,10 +564,10 @@ class BertEncoder(nn.Module):
 
     def _d_expand_mask(self, d_mask: torch.Tensor, mask_type='both', tgt_len: Optional[int] = None):
         """
-        d_expand_mask:Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
-        d_mask_type: choice['d_mask_other', 'd_mask_own']
+        d_mask: Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
+        mask_type: choice['siblings_masking', 'self_masking']
         """
-        if mask_type:
+        if mask_type in ['siblings_masking', 'self_masking', 'both']:
             bsz, src_len = d_mask.size()[0], d_mask.size()[1]
             tgt_len = tgt_len if tgt_len is not None else src_len
             new_d_mask = []
@@ -629,9 +629,11 @@ class BertEncoder(nn.Module):
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
 
         next_decoder_cache = () if use_cache else None
-        # use tlm
+        # use tlm when training and use_tlm = 1
         if self.use_tlm and self.training:
             attention_mask_copy = attention_mask
+        else:
+            attention_mask = self._d_expand_mask(attention_mask, mask_type='')
 
         for i, layer_module in enumerate(self.layer):
             if self.use_tlm and self.training:

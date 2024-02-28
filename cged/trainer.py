@@ -1,6 +1,5 @@
 import torch, random, gc
 from torch import nn, optim
-import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AdamW
 from transformers.models.bart.modeling_bart import shift_tokens_right
@@ -50,7 +49,6 @@ class Trainer(nn.Module):
         self.tokenizer = tokenizer
         self.valid_epoch = 0  # 记录验证集loss不下降的次数
         self.start_epoch = 0  # 开始的epoch
-        self.weight_a = args.weight_a
 
         if args.optimizer == 'Adam':
             self.optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -64,16 +62,17 @@ class Trainer(nn.Module):
         self.bt_loss = float('inf')
 
     def text_batching(self, batch):
-        gold_y = []
+        tgt_labels, _src_lines = [], []
         input_ids, attention_mask = [], []
         decoder_attention_mask = []
         _max_src_len, _max_tgt_len = 0, 0
-        _src_lines = []
 
         for b in batch:
             _src_lines.append(b['src'])
-            _max_src_len = max(_max_src_len, len(b['src']) + 2)
-            _max_tgt_len = max(_max_tgt_len, len(b['tgt']) + 1)  # cls
+            _src_len = len(b['src']) + 2
+            _tgt_len = len(b['tgt']) + 1
+            _max_src_len = max(_max_src_len, _src_len)
+            _max_tgt_len = max(_max_tgt_len, _tgt_len)  # cls
 
         for src_line, b in zip(_src_lines, batch):
             src_input_ids = [self.tokenizer.cls_token_id] + src_line + [self.tokenizer.sep_token_id]
@@ -89,23 +88,23 @@ class Trainer(nn.Module):
             _tgt_input_ids = b['tgt'] + [self.tokenizer.sep_token_id]
             tgt_input_len = len(_tgt_input_ids)
             _tgt_input_ids = _tgt_input_ids + [self.tokenizer.pad_token_id] * (_max_tgt_len - tgt_input_len)
-            gold_y.append(torch.tensor(_tgt_input_ids).unsqueeze(0))
+            tgt_labels.append(torch.tensor(_tgt_input_ids).unsqueeze(0))
 
             _dec_att_mask = [1] * (tgt_input_len) + [0] * (_max_tgt_len - tgt_input_len)
             decoder_attention_mask.append(torch.tensor(_dec_att_mask).unsqueeze(0))
 
         input_ids = torch.cat(input_ids).long()
         attention_mask = torch.cat(attention_mask).long()
-        gold_y = torch.cat(gold_y).long()
+        tgt_labels = torch.cat(tgt_labels).long()
 
         # shift_tokens_right
-        decoder_input_ids = shift_tokens_right(gold_y, self.config.pad_token_id, self.config.decoder_start_token_id)
+        decoder_input_ids = shift_tokens_right(tgt_labels, self.config.pad_token_id, self.config.decoder_start_token_id)
         decoder_attention_mask = torch.cat(decoder_attention_mask).long()
 
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "tgt_labels": gold_y,
+            "tgt_labels": tgt_labels,
             "decoder_input_ids": decoder_input_ids,
             "decoder_attention_mask": decoder_attention_mask
         }
@@ -122,7 +121,7 @@ class Trainer(nn.Module):
             self.model.zero_grad()
             self.optimizer = self.lr_decay(self.optimizer, epoch, self.args.lr_decay)
 
-            print("\n === Epoch %d train ===" % epoch, flush=True)
+            print("\n=== Epoch %d train ===" % epoch, flush=True)
             avg_loss = AverageMeter()
 
             for batch_id in range(total_batch):
@@ -151,7 +150,7 @@ class Trainer(nn.Module):
 
                 if (batch_id + 1) % self.args.gradient_accumulation_steps == 0:
                     self.optimizer.step()
-                    self.model.zero_grad()  # 应该使用 model.zero_grad是可以的
+                    self.model.zero_grad()
 
                 if (batch_id + 1) % self.args.print_steps == 0:
                     print()

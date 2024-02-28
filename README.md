@@ -34,9 +34,11 @@ sh bert-base_sh/rte_train_tlm.sh
 cd glue sh bert-base_sh/rte_train.sh
 
 ### 🆕1.3 Training with TLM based on Bart
-1. First, you need to install fnlp/bart-base-chinese;
-2. Second, run preprocess.py
-3. The code is not high efficient, I will update it soon.
+
+1. First, you need to install the pre-trained lm [fnlp/bart-base-chinese](https://github.com/fastnlp/CPT/blob/master/misc/bart-base-model.md);
+2. Second, run pre_process.py in `cged/utils/pre_process.py`
+3. The code is not high efficient for training, I will update it soon.
+
 ```shell
 cd cged
 sh train_tlm.sh 0
@@ -50,7 +52,7 @@ If you plan to apply tlm to decoder-only architecture, you can reference to the 
 # Todo
 
 - ✅ Run Bert-base with TLM.
-- Run Bart-base with TLM
+- ✅ Run Bart-base with TLM
 - To test QWen/LLama/sqlcoder with TLM.
 - To pull requests code into Transformers.
 

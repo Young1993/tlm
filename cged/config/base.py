@@ -36,7 +36,7 @@ data_arg.add_argument('--masking-rate', type=float, default=0.9)
 # data_arg.add_argument('--beta', type=float, default=0.3)
 # data_arg.add_argument('--repetition_penalty', default=1.0, type=float, help='重复处罚率')
 # data_arg.add_argument('--top_k', default=5, type=float, help='解码时保留概率最高的多少个标记')
-data_arg.add_argument('--weight_a', default=2, type=float)
+# data_arg.add_argument('--weight_a', default=2, type=float)
 
 learn_arg = add_argument_group('Learning')
 learn_arg.add_argument('--model_name', type=str, default="gec")

@@ -735,7 +735,7 @@ class BartEncoder(BartPretrainedModel):
     def set_input_embeddings(self, value):
         self.embed_tokens = value
 
-    def _d_expand_mask(self, d_mask: torch.Tensor, mask_type='both', tgt_len: Optional[int] = None):
+    def _d_expand_mask(self, d_mask: torch.Tensor, mask_type, attn_m: torch.Tensor, tgt_len: Optional[int] = None):
         """
         d_mask: Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
         mask_type: choice['siblings_masking', 'self_masking']
@@ -744,37 +744,41 @@ class BartEncoder(BartPretrainedModel):
         tgt_len = tgt_len if tgt_len is not None else src_len
         new_d_mask = []
 
-        for dm in d_mask:
+        for dm, om in zip(d_mask, attn_m):
             ndm = []
+            pad_index = torch.nonzero(om > 0.5)[-1]
             for i in range(len(dm)):
-                if mask_type == 'siblings_masking':
-                    if dm[i] != 1:
-                        _ = torch.zeros(len(dm), dtype=torch.int64).to(dm.device)
-                        _[i] = 1
-                    else:
-                        _ = dm
-                elif mask_type == 'self_masking':
-                    if dm[i] != 1:
-                        _ = torch.ones(len(dm), dtype=torch.int64).to(dm.device)
-                        _[i] = 0
-                    else:
-                        _ = dm
-                elif mask_type == 'both':
-                    random_mask_type = random.choice(['siblings_masking', 'self_masking'])
-                    if random_mask_type == 'siblings_masking':
+                if i <= pad_index:
+                    if mask_type == 'siblings_masking':
                         if dm[i] != 1:
                             _ = torch.zeros(len(dm), dtype=torch.int64).to(dm.device)
                             _[i] = 1
                         else:
                             _ = dm
-                    elif random_mask_type == 'self_masking':
+                    elif mask_type == 'self_masking':
                         if dm[i] != 1:
                             _ = torch.ones(len(dm), dtype=torch.int64).to(dm.device)
                             _[i] = 0
                         else:
                             _ = dm
+                    elif mask_type == 'both':
+                        random_mask_type = random.choice(['siblings_masking', 'self_masking'])
+                        if random_mask_type == 'siblings_masking':
+                            if dm[i] != 1:
+                                _ = torch.zeros(len(dm), dtype=torch.int64).to(dm.device)
+                                _[i] = 1
+                            else:
+                                _ = dm
+                        elif random_mask_type == 'self_masking':
+                            if dm[i] != 1:
+                                _ = torch.ones(len(dm), dtype=torch.int64).to(dm.device)
+                                _[i] = 0
+                            else:
+                                _ = dm
+                    else:
+                        raise NotImplementedError(f"mask_type {mask_type} is invalid")
                 else:
-                    raise NotImplementedError(f"mask_type {mask_type} is invalid")
+                    _ = dm
                 ndm.append(_.unsqueeze(0))
             new_d_mask.append(torch.cat(ndm).unsqueeze(0))
         expanded_mask = torch.cat(new_d_mask)  # (bsz, tgt_len, src_len)
@@ -881,7 +885,7 @@ class BartEncoder(BartPretrainedModel):
                 # use bernoulli random function to select  = 1 - R
                 attention_mask = attention_mask * torch.bernoulli(torch.full(attention_mask.shape, self.rate)).to(
                     attention_mask.device)
-                attention_mask = self._d_expand_mask(attention_mask, 'both')
+                attention_mask = self._d_expand_mask(attention_mask, 'both', attention_mask_copy)
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
@@ -988,7 +992,8 @@ class BartDecoder(BartPretrainedModel):
 
         return combined_attention_mask
 
-    def _d_expand_mask(self, d_mask: torch.Tensor, dtype, mask_type='both', tgt_len: Optional[int] = None):
+    def _d_expand_mask(self, d_mask: torch.Tensor, dtype, mask_type='both', tgt_len: Optional[int] = None,
+                       attn_m: torch.Tensor = None):
         """
         d_mask: Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
         mask_type: choice['siblings_masking', 'self_masking']
@@ -998,38 +1003,41 @@ class BartDecoder(BartPretrainedModel):
         new_d_mask = []
         tmp_zero = torch.zeros(src_len, dtype=dtype).to(device)
 
-        for dm in d_mask:
+        for dm, om in zip(d_mask, attn_m):
             ndm = []
-
+            pad_index = torch.nonzero(om > 0.5)[-1]
             for i in range(len(dm)):
-                if mask_type == 'siblings_masking':
-                    if dm[i] != 1:
-                        _ = copy.deepcopy(tmp_zero)
-                        _[i] = 1
-                    else:
-                        _ = dm
-                elif mask_type == 'self_masking':
-                    if dm[i] != 1:
-                        _ = copy.deepcopy(tmp_zero)
-                        _[i] = 0
-                    else:
-                        _ = dm
-                elif mask_type == 'both':
-                    random_mask_type = random.choice(['siblings_masking', 'self_masking'])
-                    if random_mask_type == 'siblings_masking':
+                if i <= pad_index:
+                    if mask_type == 'siblings_masking':
                         if dm[i] != 1:
                             _ = copy.deepcopy(tmp_zero)
                             _[i] = 1
                         else:
                             _ = dm
-                    elif random_mask_type == 'self_masking':
+                    elif mask_type == 'self_masking':
                         if dm[i] != 1:
                             _ = copy.deepcopy(tmp_zero)
                             _[i] = 0
                         else:
                             _ = dm
+                    elif mask_type == 'both':
+                        random_mask_type = random.choice(['siblings_masking', 'self_masking'])
+                        if random_mask_type == 'siblings_masking':
+                            if dm[i] != 1:
+                                _ = copy.deepcopy(tmp_zero)
+                                _[i] = 1
+                            else:
+                                _ = dm
+                        elif random_mask_type == 'self_masking':
+                            if dm[i] != 1:
+                                _ = copy.deepcopy(tmp_zero)
+                                _[i] = 0
+                            else:
+                                _ = dm
+                    else:
+                        raise NotImplementedError(f"mask_type {mask_type} is invalid")
                 else:
-                    raise NotImplementedError(f"mask_type {mask_type} is invalid")
+                    _ = dm
                 ndm.append(_.unsqueeze(0))
             new_d_mask.append(torch.cat(ndm).unsqueeze(0))
         expanded_mask = torch.cat(new_d_mask)  # (bsz, tgt_len, src_len)
@@ -1037,7 +1045,8 @@ class BartDecoder(BartPretrainedModel):
 
         return expanded_mask
 
-    def d_prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length, mask_type='both'):
+    def d_prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length,
+                                         mask_type, attn_m):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
         combined_attention_mask = None
@@ -1048,9 +1057,8 @@ class BartDecoder(BartPretrainedModel):
 
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-            expanded_attn_mask = self._d_expand_mask(attention_mask, inputs_embeds.dtype, mask_type, tgt_len=input_shape[-1]).to(
-                inputs_embeds.device
-            )
+            expanded_attn_mask = self._d_expand_mask(attention_mask, inputs_embeds.dtype, mask_type,
+                                                     tgt_len=input_shape[-1], attn_m=attn_m).to(inputs_embeds.device)
             combined_attention_mask = (
                 expanded_attn_mask if combined_attention_mask is None else expanded_attn_mask + combined_attention_mask
             )
@@ -1207,8 +1215,8 @@ class BartDecoder(BartPretrainedModel):
                 attention_mask = attention_mask * torch.bernoulli(torch.full(attention_mask.shape, self.rate)).to(
                     attention_mask.device)
                 attention_mask = self.d_prepare_decoder_attention_mask(
-                attention_mask, input_shape, inputs_embeds, past_key_values_length, 'both'
-            )
+                    attention_mask, input_shape, inputs_embeds, past_key_values_length, 'both', attention_mask_copy
+                )
 
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             if output_hidden_states:

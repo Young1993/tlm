@@ -1,6 +1,9 @@
 import os, torch
 import random
 import numpy as np
+import sys
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 from utils.data import build_data
 from trainer import Trainer
 from datetime import datetime
